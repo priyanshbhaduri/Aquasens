@@ -1,0 +1,214 @@
+/*
+ * Copyright (C) 2024 Priyansh Bhaduri <priyanshbhaduriuni@gmail.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*
+ * AQUASENS - Arduino Mega Code (Primary Brain)
+ * 
+ * This code handles:
+ * - Reading pH sensor
+ * - Reading TDS sensor
+ * - Reading DS18B20 temperature sensor
+ * - Reading Dissolved Oxygen sensor
+ * - Displaying data on OLED
+ * - Sending data to D1 Mini via Serial communication
+ */
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// OLED Display Settings
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Sensor Pin Definitions
+#define PH_PIN A0           // pH sensor analog pin
+#define TDS_PIN A1          // TDS sensor analog pin
+#define TEMP_PIN 2          // DS18B20 temperature sensor digital pin
+#define DO_PIN A2           // Dissolved Oxygen sensor analog pin
+
+// Temperature Sensor Setup
+OneWire oneWire(TEMP_PIN);
+DallasTemperature tempSensor(&oneWire);
+
+// Calibration values (adjust based on your sensor calibration)
+#define PH_OFFSET 0.0       // pH calibration offset
+#define TDS_FACTOR 0.5      // TDS conversion factor
+#define DO_OFFSET 0.0       // DO calibration offset
+
+// Averaging parameters
+#define NUM_SAMPLES 10      // Number of samples for averaging
+#define SAMPLE_DELAY 100    // Delay between samples (ms)
+
+// Global variables for sensor readings
+float pH_value = 0.0;
+float tds_value = 0.0;
+float temp_value = 0.0;
+float do_value = 0.0;
+
+void setup() {
+  // Initialize Serial Communication
+  Serial.begin(9600);  // For D1 Mini communication
+  Serial.println("AQUASENS - Arduino Mega Initialized");
+  
+  // Initialize OLED Display
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("AQUASENS");
+  display.println("Initializing...");
+  display.display();
+  delay(2000);
+  
+  // Initialize Temperature Sensor
+  tempSensor.begin();
+  
+  // Set analog reference
+  analogReference(DEFAULT);
+  
+  Serial.println("Setup Complete");
+}
+
+void loop() {
+  // Read all sensors with averaging
+  pH_value = readPH();
+  tds_value = readTDS();
+  temp_value = readTemperature();
+  do_value = readDO();
+  
+  // Display on OLED
+  displayOnOLED();
+  
+  // Send data to D1 Mini via Serial
+  sendDataToD1Mini();
+  
+  // Wait before next reading
+  delay(2000);
+}
+
+// Function to read pH sensor with averaging
+float readPH() {
+  float sum = 0.0;
+  for(int i = 0; i < NUM_SAMPLES; i++) {
+    int rawValue = analogRead(PH_PIN);
+    float voltage = rawValue * (5.0 / 1024.0);
+    float pH = 3.5 * voltage + PH_OFFSET;  // Convert voltage to pH
+    sum += pH;
+    delay(SAMPLE_DELAY);
+  }
+  return sum / NUM_SAMPLES;
+}
+
+// Function to read TDS sensor with averaging
+float readTDS() {
+  float sum = 0.0;
+  for(int i = 0; i < NUM_SAMPLES; i++) {
+    int rawValue = analogRead(TDS_PIN);
+    float voltage = rawValue * (5.0 / 1024.0);
+    // TDS calculation with temperature compensation
+    float compensationCoefficient = 1.0 + 0.02 * (temp_value - 25.0);
+    float compensationVoltage = voltage / compensationCoefficient;
+    float tds = (133.42 * compensationVoltage * compensationVoltage * compensationVoltage 
+                 - 255.86 * compensationVoltage * compensationVoltage 
+                 + 857.39 * compensationVoltage) * TDS_FACTOR;
+    sum += tds;
+    delay(SAMPLE_DELAY);
+  }
+  return sum / NUM_SAMPLES;
+}
+
+// Function to read DS18B20 temperature sensor
+float readTemperature() {
+  tempSensor.requestTemperatures();
+  float temp = tempSensor.getTempCByIndex(0);
+  
+  // Check if reading is valid
+  if(temp == DEVICE_DISCONNECTED_C) {
+    Serial.println("Error: Temperature sensor disconnected");
+    return 0.0;
+  }
+  return temp;
+}
+
+// Function to read Dissolved Oxygen sensor with averaging
+float readDO() {
+  float sum = 0.0;
+  for(int i = 0; i < NUM_SAMPLES; i++) {
+    int rawValue = analogRead(DO_PIN);
+    float voltage = rawValue * (5.0 / 1024.0);
+    // DO calculation (mg/L) - adjust formula based on your sensor
+    float DO = voltage * 2.0 + DO_OFFSET;  // Typical range 0-20 mg/L
+    sum += DO;
+    delay(SAMPLE_DELAY);
+  }
+  return sum / NUM_SAMPLES;
+}
+
+// Function to display data on OLED
+void displayOnOLED() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  
+  // Title
+  display.setCursor(25, 0);
+  display.println("AQUASENS");
+  display.drawLine(0, 10, 128, 10, SSD1306_WHITE);
+  
+  // Display sensor values
+  display.setCursor(0, 15);
+  display.print("pH: ");
+  display.print(pH_value, 2);
+  
+  display.setCursor(0, 27);
+  display.print("TDS: ");
+  display.print(tds_value, 1);
+  display.print(" ppm");
+  
+  display.setCursor(0, 39);
+  display.print("Temp: ");
+  display.print(temp_value, 1);
+  display.print(" C");
+  
+  display.setCursor(0, 51);
+  display.print("DO: ");
+  display.print(do_value, 2);
+  display.print(" mg/L");
+  
+  display.display();
+}
+
+// Function to send data to D1 Mini via Serial
+void sendDataToD1Mini() {
+  // Format: "pH TDS Temperature DO\n"
+  Serial.print(pH_value, 2);
+  Serial.print(" ");
+  Serial.print(tds_value, 1);
+  Serial.print(" ");
+  Serial.print(temp_value, 1);
+  Serial.print(" ");
+  Serial.println(do_value, 2);
+}
