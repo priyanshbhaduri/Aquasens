@@ -1,0 +1,115 @@
+# Required Libraries
+Arduino Mega Libraries:
+
+1. Adafruit_GFX (for OLED display)
+2. Adafruit_SSD1306 (for OLED display)
+3. OneWire (for DS18B20 temperature sensor)
+4. DallasTemperature (for DS18B20 temperature sensor)
+
+D1 Mini Libraries:
+
+1. ESP8266WiFi (usually pre-installed with ESP8266 board)
+2. BlynkSimpleEsp8266
+
+# Hardware Connections
+
+Arduino Mega Connections:
+1. pH Sensor A0
+2. TDS Sensor A1
+3. DS18B20 (Temp) D2
+4. DO Sensor A2
+5. OLED DisplaySDA SDA(20)
+6. OLED DisplaySCL SCL(21)
+7. Serial TX to D1 TX1 (18)
+8. Serial RX from D1 RX1(19)
+
+D1 Mini Connections:
+1. Relay 1 (Heater) D1 GPIO5
+2. Relay 2 (Pump) D2 GPIO4
+3. Relay 3 (Filter) D5 GPIO14
+4. Relay 4 (Extra) D6 GPIO12
+5. SerialRX RX GPIO3
+6. SerialTX TX GPIO1
+
+Inter-Board Connection:
+Arduino Mega TX1 (Pin 18) → D1 Mini RX
+Arduino Mega RX1 (Pin 19) → D1 Mini TX
+Arduino GND → D1 Mini GND
+
+# Blynk Setup
+Step 1: Create Blynk Account
+
+Go to blynk.cloud
+Create a new account
+Create a new template for AQUASENS
+
+Step 2: Configure Datastreams
+Create the following Virtual Pins in your Blynk template:
+Refer to this link for the image: https://drive.google.com/file/d/12YcSYV6gaMed2cwKWd5g3h79NOmDf0M3/view?usp=sharing
+
+Step 3: Design Mobile Dashboard
+Add widgets to your mobile app:
+
+Gauge widgets for pH, TDS, Temperature, DO
+Switch widgets for Relay 1-4 control
+Chart widgets for historical data
+
+Step 4: Get Credentials
+
+Get your Template ID from template settings
+Get your Auth Token from device info
+Update these in the D1 Mini code
+
+# Code Configuration
+
+Arduino Mega Code:
+// Adjust these calibration values based on your sensors:
+#define PH_OFFSET 0.0       // Adjust after pH calibration
+#define TDS_FACTOR 0.5      // Adjust based on TDS calibration
+#define DO_OFFSET 0.0       // Adjust after DO calibration
+
+// You can also adjust averaging parameters:
+#define NUM_SAMPLES 10      // More samples = more stable but slower
+#define SAMPLE_DELAY 100    // Delay between samples in milliseconds
+
+D1 Mini Code:
+
+// CRITICAL: Update these before uploading!
+#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"     // From Blynk console
+#define BLYNK_AUTH_TOKEN "YOUR_AUTH_TOKEN"       // From Blynk device
+
+char ssid[] = "YOUR_WIFI_SSID";                  // Your WiFi name
+char pass[] = "YOUR_WIFI_PASSWORD";              // Your WiFi password
+
+#  Sensor Calibration
+
+1. pH Sensor Calibration:
+
+Use pH 7.0 buffer solution
+Adjust PH_OFFSET until reading shows 7.0
+Test with pH 4.0 and pH 10.0 buffers for accuracy
+
+2. TDS Sensor Calibration:
+
+Use 342 ppm calibration solution (or known TDS solution)
+Adjust TDS_FACTOR until reading matches known value
+
+3. Temperature Sensor:
+
+DS18B20 is factory calibrated (±0.5°C accuracy)
+No calibration needed
+
+4. DO Sensor Calibration:
+
+Use 100% saturated water (air-saturated at room temperature)
+Adjust DO_OFFSET to match expected saturation value
+
+# Expected Data Format
+pH TDS Temperature DO
+
+Example 
+7.25 450.3 26.5 8.75
+7.28 448.1 26.6 8.72
+7.30 451.2 26.5 8.70
+
+
